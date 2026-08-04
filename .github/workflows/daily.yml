@@ -1,0 +1,22 @@
+name: Daily MA150 Screener
+
+on:
+  schedule:
+    # 22:00 UTC, Mon-Fri — after US regular market close (16:00 ET) under both
+    # EDT (UTC-4, closes 20:00 UTC) and EST (UTC-5, closes 21:00 UTC).
+    - cron: "0 22 * * 1-5"
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python screener.py
+        env:
+          SCREENER_WORKER_URL: ${{ secrets.SCREENER_WORKER_URL }}
+          SCREENER_SECRET: ${{ secrets.SCREENER_SECRET }}
