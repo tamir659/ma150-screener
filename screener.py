@@ -56,21 +56,25 @@ def print_table(entries):
 def send_alert(entries):
     worker_url = os.environ.get("SCREENER_WORKER_URL")
     secret = os.environ.get("SCREENER_SECRET")
-    if not worker_url or not secret:
-        print("SCREENER_WORKER_URL / SCREENER_SECRET not set - skipping WhatsApp send, printed table only.")
+    phone_number = os.environ.get("PHONE_NUMBER")
+    if not worker_url or not secret or not phone_number:
+        print("SCREENER_WORKER_URL / SCREENER_SECRET / PHONE_NUMBER not set - skipping WhatsApp send, printed table only.")
         return
 
-    payload = [
-        {"ticker": e["ticker"], "price": e["price"], "average": e["average"], "distance": e["distance"]}
-        for e in entries
-    ]
+    payload = {
+        "to": phone_number,
+        "entries": [
+            {"ticker": e["ticker"], "price": e["price"], "average": e["average"], "distance": e["distance"]}
+            for e in entries
+        ],
+    }
     response = requests.post(
         f"{worker_url}/screener-alert",
         headers={"X-Screener-Secret": secret, "Content-Type": "application/json"},
         json=payload,
     )
     response.raise_for_status()
-    print("Sent to WhatsApp worker.")
+    print(f"Sent to WhatsApp worker for {phone_number}.")
 
 
 if __name__ == "__main__":

@@ -1,11 +1,12 @@
-name: Daily MA150 Screener
+name: MA150 Screener (on demand)
 
 on:
-  schedule:
-    # 22:00 UTC, Mon-Fri — after US regular market close (16:00 ET) under both
-    # EDT (UTC-4, closes 20:00 UTC) and EST (UTC-5, closes 21:00 UTC).
-    - cron: "0 22 * * 1-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      phone_number:
+        description: "WhatsApp number to reply to (E.164, no +, e.g. 972501234567)"
+        required: true
+        type: string
 
 jobs:
   run:
@@ -20,3 +21,4 @@ jobs:
         env:
           SCREENER_WORKER_URL: ${{ secrets.SCREENER_WORKER_URL }}
           SCREENER_SECRET: ${{ secrets.SCREENER_SECRET }}
+          PHONE_NUMBER: ${{ github.event.inputs.phone_number }}
