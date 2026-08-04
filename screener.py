@@ -54,9 +54,12 @@ def print_table(entries):
 
 
 def send_alert(entries):
-    worker_url = os.environ.get("SCREENER_WORKER_URL")
-    secret = os.environ.get("SCREENER_SECRET")
-    phone_number = os.environ.get("PHONE_NUMBER")
+    # .strip(): GitHub Actions secrets don't trim whitespace on their own, and a stray
+    # trailing newline from a copy-paste (confirmed live, 2026-08-04) makes `requests` reject
+    # the header outright with InvalidHeader before it ever reaches the network.
+    worker_url = (os.environ.get("SCREENER_WORKER_URL") or "").strip()
+    secret = (os.environ.get("SCREENER_SECRET") or "").strip()
+    phone_number = (os.environ.get("PHONE_NUMBER") or "").strip()
     if not worker_url or not secret or not phone_number:
         print("SCREENER_WORKER_URL / SCREENER_SECRET / PHONE_NUMBER not set - skipping WhatsApp send, printed table only.")
         return
