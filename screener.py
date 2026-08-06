@@ -12,7 +12,7 @@ TOP_N = 20
 
 
 def get_sp500_tickers():
-    response = requests.get(SP500_CSV_URL)
+    response = requests.get(SP500_CSV_URL, timeout=15)
     reader = csv.DictReader(io.StringIO(response.text))
     return [row["Symbol"] for row in reader]
 
@@ -20,7 +20,7 @@ def get_sp500_tickers():
 def get_stock_data(ticker, period):
     yahoo_ticker = ticker.replace(".", "-")
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_ticker}?range=1y&interval=1d"
-    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+    response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
     data = response.json()
     result = data["chart"]["result"][0]
     price = result["meta"]["regularMarketPrice"]
