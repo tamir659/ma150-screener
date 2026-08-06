@@ -53,13 +53,18 @@ def print_table(entries):
         print(f"{e['ticker']:<8}{e['price']:>10.2f}{e['average']:>10.2f}{e['distance']:>+9.2f}%")
 
 
-def send_alert(entries):
+def _worker_credentials():
     # .strip(): GitHub Actions secrets don't trim whitespace on their own, and a stray
     # trailing newline from a copy-paste (confirmed live, 2026-08-04) makes `requests` reject
     # the header outright with InvalidHeader before it ever reaches the network.
     worker_url = (os.environ.get("SCREENER_WORKER_URL") or "").strip()
     secret = (os.environ.get("SCREENER_SECRET") or "").strip()
     phone_number = (os.environ.get("PHONE_NUMBER") or "").strip()
+    return worker_url, secret, phone_number
+
+
+def send_alert(entries):
+    worker_url, secret, phone_number = _worker_credentials()
     if not worker_url or not secret or not phone_number:
         print("SCREENER_WORKER_URL / SCREENER_SECRET / PHONE_NUMBER not set - skipping WhatsApp send, printed table only.")
         return
@@ -75,19 +80,47 @@ def send_alert(entries):
         f"{worker_url}/screener-alert",
         headers={"X-Screener-Secret": secret, "Content-Type": "application/json"},
         json=payload,
+        timeout=30,
     )
     response.raise_for_status()
     print(f"Sent to WhatsApp worker for {phone_number}.")
 
 
+# Called when anything in the run fails, so the user gets a clear "it broke" WhatsApp message
+# instead of silence — previously a failure anywhere before send_alert() (e.g. the S&P 500
+# ticker-list fetch, which had no error handling at all) just meant no reply ever arrived.
+def send_error(message):
+    worker_url, secret, phone_number = _worker_credentials()
+    if not worker_url or not secret or not phone_number:
+        print(f"SCREENER_WORKER_URL / SCREENER_SECRET / PHONE_NUMBER not set - can't send error notification. Error was: {message}")
+        return
+
+    try:
+        response = requests.post(
+            f"{worker_url}/screener-alert",
+            headers={"X-Screener-Secret": secret, "Content-Type": "application/json"},
+            json={"to": phone_number, "error": message},
+            timeout=30,
+        )
+        response.raise_for_status()
+        print(f"Sent failure notice to WhatsApp worker for {phone_number}.")
+    except Exception as notify_err:
+        print(f"Also failed to send the error notification itself: {notify_err}. Original error: {message}")
+
+
 if __name__ == "__main__":
-    tickers = get_sp500_tickers()
-    print(f"{len(tickers)} tickers in S&P 500")
+    try:
+        tickers = get_sp500_tickers()
+        print(f"{len(tickers)} tickers in S&P 500")
 
-    results, failed = scan_all(tickers)
-    print(f"{len(results)} succeeded, {len(failed)} failed: {failed}")
+        results, failed = scan_all(tickers)
+        print(f"{len(results)} succeeded, {len(failed)} failed: {failed}")
 
-    top20 = get_top_n(results)
-    print_table(top20)
+        top20 = get_top_n(results)
+        print_table(top20)
 
-    send_alert(top20)
+        send_alert(top20)
+    except Exception as e:
+        print(f"Screener run failed: {e}")
+        send_error(str(e))
+        raise
