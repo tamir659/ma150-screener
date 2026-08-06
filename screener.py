@@ -17,7 +17,7 @@ def get_sp500_tickers():
     return [row["Symbol"] for row in reader]
 
 
-def get_stock_data(ticker):
+def get_stock_data(ticker, period):
     yahoo_ticker = ticker.replace(".", "-")
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_ticker}?range=1y&interval=1d"
     response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -25,17 +25,17 @@ def get_stock_data(ticker):
     result = data["chart"]["result"][0]
     price = result["meta"]["regularMarketPrice"]
     closes = result["indicators"]["quote"][0]["close"]
-    average = sma(closes, 150)
+    average = sma(closes, period)
     distance = pct_distance(price, average)
     return {"ticker": ticker, "price": price, "average": average, "distance": distance}
 
 
-def scan_all(tickers):
+def scan_all(tickers, period):
     results = []
     failed = []
     for i, ticker in enumerate(tickers):
         try:
-            results.append(get_stock_data(ticker))
+            results.append(get_stock_data(ticker, period))
         except Exception:
             failed.append(ticker)
         if i % 20 == 0:
@@ -47,8 +47,8 @@ def get_top_n(results, n=TOP_N):
     return sorted(results, key=lambda r: abs(r["distance"]))[:n]
 
 
-def print_table(entries):
-    print(f"{'Ticker':<8}{'Price':>10}{'SMA150':>10}{'Dist %':>10}")
+def print_table(entries, period):
+    print(f"{'Ticker':<8}{'Price':>10}{f'SMA{period}':>10}{'Dist %':>10}")
     for e in entries:
         print(f"{e['ticker']:<8}{e['price']:>10.2f}{e['average']:>10.2f}{e['distance']:>+9.2f}%")
 
@@ -63,7 +63,7 @@ def _worker_credentials():
     return worker_url, secret, phone_number
 
 
-def send_alert(entries):
+def send_alert(entries, period):
     worker_url, secret, phone_number = _worker_credentials()
     if not worker_url or not secret or not phone_number:
         print("SCREENER_WORKER_URL / SCREENER_SECRET / PHONE_NUMBER not set - skipping WhatsApp send, printed table only.")
@@ -71,6 +71,7 @@ def send_alert(entries):
 
     payload = {
         "to": phone_number,
+        "period": period,
         "entries": [
             {"ticker": e["ticker"], "price": e["price"], "average": e["average"], "distance": e["distance"]}
             for e in entries
@@ -89,7 +90,7 @@ def send_alert(entries):
 # Called when anything in the run fails, so the user gets a clear "it broke" WhatsApp message
 # instead of silence — previously a failure anywhere before send_alert() (e.g. the S&P 500
 # ticker-list fetch, which had no error handling at all) just meant no reply ever arrived.
-def send_error(message):
+def send_error(message, period):
     worker_url, secret, phone_number = _worker_credentials()
     if not worker_url or not secret or not phone_number:
         print(f"SCREENER_WORKER_URL / SCREENER_SECRET / PHONE_NUMBER not set - can't send error notification. Error was: {message}")
@@ -99,7 +100,7 @@ def send_error(message):
         response = requests.post(
             f"{worker_url}/screener-alert",
             headers={"X-Screener-Secret": secret, "Content-Type": "application/json"},
-            json={"to": phone_number, "error": message},
+            json={"to": phone_number, "error": message, "period": period},
             timeout=30,
         )
         response.raise_for_status()
@@ -109,18 +110,19 @@ def send_error(message):
 
 
 if __name__ == "__main__":
+    period = int((os.environ.get("SMA_PERIOD") or "150").strip())
     try:
         tickers = get_sp500_tickers()
         print(f"{len(tickers)} tickers in S&P 500")
 
-        results, failed = scan_all(tickers)
+        results, failed = scan_all(tickers, period)
         print(f"{len(results)} succeeded, {len(failed)} failed: {failed}")
 
         top20 = get_top_n(results)
-        print_table(top20)
+        print_table(top20, period)
 
-        send_alert(top20)
+        send_alert(top20, period)
     except Exception as e:
         print(f"Screener run failed: {e}")
-        send_error(str(e))
+        send_error(str(e), period)
         raise
