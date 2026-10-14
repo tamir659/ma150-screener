@@ -17,6 +17,10 @@ def _build_prompt(candidates):
         "sector narrative like AI exposure for a chip stock). One short closing clause noting "
         "this is informational, not investment advice - nothing more than that.",
         "",
+        "Write the analysis text itself in Hebrew. Keep the ticker symbols, company names, and "
+        "any numbers in the analysis in Latin characters/digits as usual - only the surrounding "
+        "sentences should be Hebrew.",
+        "",
         "Respond with ONLY a JSON array, no other text, in this exact shape:",
         '[{"ticker": "AAPL", "analysis": "..."}]',
         "",
