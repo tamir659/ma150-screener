@@ -3,6 +3,7 @@ import time
 import requests
 
 from claude_client import analyze_candidates
+from earnings import days_until, get_next_earnings_date
 from news import get_recent_news
 from rsi import rsi
 from screener import _worker_credentials, get_sp500_tickers
@@ -10,6 +11,8 @@ from screener import _worker_credentials, get_sp500_tickers
 ATH_DROP_THRESHOLD = -30  # at least 30% below all-time high
 RSI_OVERSOLD_THRESHOLD = 30  # classic oversold RSI line
 MAX_CANDIDATES = 5  # deep-dive report, not a 20-line table - each one gets news + an AI writeup
+MIN_DAYS_TO_EARNINGS = 30  # skip anything reporting earnings within a month - too easy for an
+                            # earnings surprise to swamp the ATH/RSI thesis before it plays out
 
 
 def get_ath_data(ticker):
@@ -54,16 +57,32 @@ def scan_all_rebound(tickers):
 
 
 def get_candidates(results, ath_drop_threshold=ATH_DROP_THRESHOLD, rsi_threshold=RSI_OVERSOLD_THRESHOLD,
-                    max_candidates=MAX_CANDIDATES):
+                    max_candidates=MAX_CANDIDATES, min_days_to_earnings=MIN_DAYS_TO_EARNINGS):
     qualifying = [r for r in results if r["pct_below_ath"] <= ath_drop_threshold and r["rsi"] < rsi_threshold]
     qualifying.sort(key=lambda r: r["rsi"])  # most oversold first
-    return qualifying[:max_candidates]
+
+    # Earnings-calendar lookup only runs against this (usually small) qualifying pool, not all
+    # 503 tickers - cheap. Walks the most-oversold-first list until max_candidates fill up,
+    # skipping anything reporting too soon rather than just taking a straight top-N slice.
+    candidates = []
+    skipped_earnings = []
+    for r in qualifying:
+        earnings_date = get_next_earnings_date(r["ticker"])
+        r["next_earnings_date"] = earnings_date
+        if earnings_date is not None and days_until(earnings_date) < min_days_to_earnings:
+            skipped_earnings.append((r["ticker"], earnings_date))
+            continue
+        candidates.append(r)
+        if len(candidates) >= max_candidates:
+            break
+    return candidates, skipped_earnings
 
 
 def print_table(candidates):
-    print(f"{'Ticker':<8}{'Price':>10}{'ATH':>10}{'Below ATH':>12}{'RSI':>8}")
+    print(f"{'Ticker':<8}{'Price':>10}{'ATH':>10}{'Below ATH':>12}{'RSI':>8}  Next earnings")
     for c in candidates:
-        print(f"{c['ticker']:<8}{c['price']:>10.2f}{c['ath']:>10.2f}{c['pct_below_ath']:>+11.2f}%{c['rsi']:>8.1f}")
+        print(f"{c['ticker']:<8}{c['price']:>10.2f}{c['ath']:>10.2f}{c['pct_below_ath']:>+11.2f}%{c['rsi']:>8.1f}  "
+              f"{c.get('next_earnings_date') or 'unknown'}")
 
 
 def send_alert(candidates, analyses):
@@ -123,8 +142,11 @@ if __name__ == "__main__":
         results, failed = scan_all_rebound(tickers)
         print(f"{len(results)} succeeded, {len(failed)} failed: {failed}")
 
-        candidates = get_candidates(results)
+        candidates, skipped_earnings = get_candidates(results)
         print(f"{len(candidates)} candidate(s) matched the thresholds")
+        if skipped_earnings:
+            print(f"Skipped {len(skipped_earnings)} for earnings within {MIN_DAYS_TO_EARNINGS} days: "
+                  f"{skipped_earnings}")
         print_table(candidates)
 
         analyses = {}
