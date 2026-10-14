@@ -6,12 +6,17 @@ from fibonacci import fib_level, find_best_swing
 from screener import _worker_credentials, get_sp500_tickers
 
 MIN_RALLY_PCT = 30  # "strong, sharp" rally - matches the common >30% screening convention
-LOOKBACK_RANGE = "6mo"  # enough history to capture a multi-week-to-multi-month rally
+# Weekly candles over 5 years (changed from 6mo/daily at the user's request, 2026-10-14) -
+# catches major multi-year swings instead of smaller moves inside the last 6 months. A
+# recently-listed ticker (spinoff/IPO) just gets however much history actually exists -
+# Yahoo returns what it has rather than erroring, which is the right behavior here.
+LOOKBACK_RANGE = "5y"
+INTERVAL = "1wk"
 
 
 def get_fibonacci_data(ticker):
     yahoo_ticker = ticker.replace(".", "-")
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_ticker}?range={LOOKBACK_RANGE}&interval=1d"
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yahoo_ticker}?range={LOOKBACK_RANGE}&interval={INTERVAL}"
     response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
     data = response.json()
     result = data["chart"]["result"][0]
