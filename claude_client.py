@@ -49,7 +49,11 @@ def analyze_candidates(candidates):
 
     body = {
         "model": MODEL,
-        "max_tokens": 1200,
+        # Adaptive thinking (on by default on claude-sonnet-5, even with no "thinking" param
+        # sent) eats into this same budget - a real run with 5 candidates hit stop_reason
+        # "max_tokens" at 1200 with ~500 tokens spent on thinking alone, truncating the JSON
+        # mid-string. Sized with real headroom, not just for the visible text.
+        "max_tokens": 4096,
         "messages": [{"role": "user", "content": _build_prompt(candidates)}],
     }
 
