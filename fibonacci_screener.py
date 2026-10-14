@@ -2,10 +2,12 @@ import time
 
 import requests
 
+from earnings import days_until, get_next_earnings_date
 from fibonacci import fib_level, find_best_swing
 from screener import _worker_credentials, get_sp500_tickers
 
 MIN_RALLY_PCT = 30  # "strong, sharp" rally - matches the common >30% screening convention
+MIN_DAYS_TO_EARNINGS = 20  # shorter window than rebound_screener's 30 - user's choice here
 # Weekly candles over 5 years (changed from 6mo/daily at the user's request, 2026-10-14) -
 # catches major multi-year swings instead of smaller moves inside the last 6 months. A
 # recently-listed ticker (spinoff/IPO) just gets however much history actually exists -
@@ -54,7 +56,7 @@ def scan_all_fibonacci(tickers):
     return results, failed
 
 
-def get_candidates(results, min_rally_pct=MIN_RALLY_PCT):
+def get_candidates(results, min_rally_pct=MIN_RALLY_PCT, min_days_to_earnings=MIN_DAYS_TO_EARNINGS):
     # The "golden pocket": price sitting between the 65% and 61.8% retracement levels,
     # after a rally big enough to call "strong and sharp" rather than noise.
     qualifying = [
@@ -62,14 +64,26 @@ def get_candidates(results, min_rally_pct=MIN_RALLY_PCT):
         if r["rally_pct"] >= min_rally_pct and r["fib65"] <= r["price"] <= r["fib618"]
     ]
     qualifying.sort(key=lambda r: r["rally_pct"], reverse=True)  # biggest rallies first
-    return qualifying
+
+    # Earnings-calendar lookup only runs against this (usually small) qualifying pool, not
+    # all 503 tickers - same reasoning as rebound_screener.py, just a shorter 20-day window.
+    candidates = []
+    skipped_earnings = []
+    for r in qualifying:
+        earnings_date = get_next_earnings_date(r["ticker"])
+        r["next_earnings_date"] = earnings_date
+        if earnings_date is not None and days_until(earnings_date) < min_days_to_earnings:
+            skipped_earnings.append((r["ticker"], earnings_date))
+            continue
+        candidates.append(r)
+    return candidates, skipped_earnings
 
 
 def print_table(candidates):
-    print(f"{'Ticker':<8}{'Price':>10}{'Low':>10}{'High':>10}{'Rally':>9}{'Fib618':>10}")
+    print(f"{'Ticker':<8}{'Price':>10}{'Low':>10}{'High':>10}{'Rally':>9}{'Fib618':>10}  Next earnings")
     for c in candidates:
         print(f"{c['ticker']:<8}{c['price']:>10.2f}{c['swing_low']:>10.2f}{c['swing_high']:>10.2f}"
-              f"{c['rally_pct']:>+8.1f}%{c['fib618']:>10.2f}")
+              f"{c['rally_pct']:>+8.1f}%{c['fib618']:>10.2f}  {c.get('next_earnings_date') or 'unknown'}")
 
 
 def send_alert(candidates):
@@ -130,8 +144,11 @@ if __name__ == "__main__":
         results, failed = scan_all_fibonacci(tickers)
         print(f"{len(results)} succeeded, {len(failed)} failed: {failed}")
 
-        candidates = get_candidates(results)
+        candidates, skipped_earnings = get_candidates(results)
         print(f"{len(candidates)} candidate(s) in the golden pocket")
+        if skipped_earnings:
+            print(f"Skipped {len(skipped_earnings)} for earnings within {MIN_DAYS_TO_EARNINGS} days: "
+                  f"{skipped_earnings}")
         print_table(candidates)
 
         send_alert(candidates)
