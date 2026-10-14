@@ -62,7 +62,11 @@ def analyze_candidates(candidates):
             timeout=60,
         )
         if response.status_code == 200:
-            text = response.json()["content"][0]["text"]
+            # claude-sonnet-5 runs adaptive thinking by default even without an explicit
+            # "thinking" param, so content[0] is often a "thinking" block, not the text block -
+            # scan for the actual text block instead of assuming it's first.
+            blocks = response.json()["content"]
+            text = next(b["text"] for b in blocks if b.get("type") == "text")
             return _parse_response(text, candidates)
         if response.status_code == 429 or response.status_code >= 500:
             last_error = f"Anthropic API {response.status_code}: {response.text}"
