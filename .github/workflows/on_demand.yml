@@ -17,6 +17,8 @@ jobs:
   run:
     runs-on: ubuntu-latest
     steps:
+      - name: Hide recipient ID in logs
+        run: echo "::add-mask::$(jq -r '.inputs.phone_number // empty' "$GITHUB_EVENT_PATH")"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:

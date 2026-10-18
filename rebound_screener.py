@@ -112,7 +112,7 @@ def send_alert(candidates, analyses):
         timeout=30,
     )
     response.raise_for_status()
-    print(f"Sent rebound alert to worker for {phone_number} ({len(candidates)} candidate(s)).")
+    print(f"Sent rebound alert to worker ({len(candidates)} candidate(s)).")
 
 
 def send_error(message):
@@ -129,7 +129,7 @@ def send_error(message):
             timeout=30,
         )
         response.raise_for_status()
-        print(f"Sent failure notice to worker for {phone_number}.")
+        print(f"Sent failure notice to worker.")
     except Exception as notify_err:
         print(f"Also failed to send the error notification itself: {notify_err}. Original error: {message}")
 

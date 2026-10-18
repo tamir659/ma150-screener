@@ -84,7 +84,7 @@ def send_alert(entries, period):
         timeout=30,
     )
     response.raise_for_status()
-    print(f"Sent to WhatsApp worker for {phone_number}.")
+    print(f"Sent to WhatsApp worker.")
 
 
 # Called when anything in the run fails, so the user gets a clear "it broke" WhatsApp message
@@ -104,7 +104,7 @@ def send_error(message, period):
             timeout=30,
         )
         response.raise_for_status()
-        print(f"Sent failure notice to WhatsApp worker for {phone_number}.")
+        print(f"Sent failure notice to WhatsApp worker.")
     except Exception as notify_err:
         print(f"Also failed to send the error notification itself: {notify_err}. Original error: {message}")
 
